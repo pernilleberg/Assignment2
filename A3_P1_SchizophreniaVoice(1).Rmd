@@ -1,0 +1,130 @@
+---
+title: "Assignment2_Part1_VoiceInSchizophrenia"
+author: "Riccardo Fusaroli"
+date: "July 17, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment 2 - Part 1 - Assessing voice in schizophrenia
+
+Schizophrenia has been associated with "inappropriate" voice, sometimes monotone, sometimes croaky. A few studies indicate that pitch might be an index of schizophrenia. However, an ongoing meta-analysis of the literature (which you will have a go at in the last assignment) indicates that pitch mean and standard deviation are only weak indicators of diagnosis. Can we do better with our new fancy complex skills?
+
+The corpus you are asked to analyse is a set of voice recordings from people with schizophrenia (just after first diagnosis) and 1-1 matched controls (on gender, age, education). Each participant watched 10 videos of triangles moving across the screen and had to describe them (so you have circa 10 recordings per person). I have already extracted the pitch once every 10 milliseconds and you will have to use this data to assess differences in the voice.
+
+N.B. Question to be answered via email to Celine: can you characterize voice in schizophrenia as acoustically different? Report the methods you used to answer this question and the results from the analyses. Add a couple of lines trying to interpret the results (make sense of the difference). E.g. People with schizophrenia tend to have high-pitched voice, and present bigger swings in their prosody than controls. Add a couple of lines describing limitations of the data/analyses if any is relevant.
+
+N.B. There are looots of files to be dealt with. Probably too many for your computer. This is a challenge for you. Some (complementary) possible strategies: You can select a subset of files only (and you have to justify your choice). You can learn how to use the apply() or map() functions. You can coordinate with classmates.
+
+```{r}
+setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
+library(pacman)
+p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table)
+
+part1 = read.delim("Pitch/Study1D0S101T1_f0.txt")
+
+```
+
+1. In the course of this assignment you have to first select one datafile and figure out how to:
+
+- Extract "standard" descriptors of pitch: Mean, standard deviation, range
+- Extract less "standard" descriptors of pitch you can think of (e.g. median, iqr, mean absoluted deviation, coefficient of variation)
+- Extract "complex" descriptors: recurrence quantification analysis
+
+```{r}
+#Extracting standard descriptors of pitch
+summary(part1)
+#Getting mean, sd, range median, min, max, SE etc.)
+round(stat.desc(part1$f0, norm = T),6)
+
+#Getting iqr and mad
+IQR(part1$f0)
+mad(part1$f0)
+
+#Extracting complex descriptors, crqa compares phase spaces in two time series with a delay - returns distance matrix
+crqa_part1 = crqa(part1$f0, part1$f0, embed = 2, delay = 1, normalize = 0, rescale = 0, radius = 0.5, mindiagline = 2, minvertline = 1)
+
+#Let's make a pretty graph
+RP = crqa_part1$RP
+RP = matrix(as.numeric(RP), nrow = ncol(RP)) 
+cols = c("white","blue4")
+image(RP, xlab = "", ylab = "", col = cols)
+
+```
+
+#function that tells R to continue runing an analysis, even when it finds an error (it will still inform you about the error) --> wrapping the function in try()
+
+2. Second you will have to turn the code into a function and loop through all the files (or even better use apply/sapply/lapply)
+- Remember to extract the relevant information from the file names (Participant, Diagnosis, Trial, Study)
+
+```{r}
+folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/"
+
+filelist = list.files(path = folder , pattern = "*.txt", full.names = T)
+filelist = filelist[1:100]
+
+opt_param_extractor = function(filename){ #making a function to find optimal parameters
+  temp_df = read.delim(filename)
+  par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip")
+  opt_param = NULL
+  opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3.5, max.rec = 4.5))
+  if (length(opt_param) > 1) {
+    result_df = data.frame(radius = opt_param[1], emddim = opt_param[2], delay = opt_param[3], filename = str_extract(str_extract(filename, "S\\d+"), "\\d+"))
+    
+  } else {
+  result_df = data.frame(radius = NA, emddim = NA, delay = NA, filename = str_extract(str_extract(filename, "S\\d+"), "\\d+"))
+  }
+  return(result_df)
+}
+
+temp=lapply(filelist,opt_param_extractor)
+opm_param_df = rbindlist(temp, fill = T)
+
+
+rqa_extractor = function(filename){ #making a function which applies the optimal parameters and save the rqa results
+  filename = filelist[1]
+  temp_df = read.delim(paste(folder, filename, sep = ""))
+  results = crqa(temp_df$f0, temp_df$f0, opt_par?)
+  data.frame(RR = result[1], DET = result[2], NRLINE = result[3],
+             maxL = result[4], L = result[5], ENTR = result[6],
+             rENTR = result[7], LAM = result[8], TT = result[9])
+  ##RR = percentage of black dots, DET = how many of the individual repitions occur in connected trajectories, L = average length of line structures, maxL = longest line, ENTR = entrophy (predictability of the next dot), TT = average length of vertical lines
+  
+}
+
+schizo_df=rbindlist(temp, fill = T)
+
+#Diagnosis --> 0 = control
+```
+
+3. Make one model per acoustic feature and test whether you can observe significant difference due to Diagnosis. Tip: Which other fixed factors should you control for (that is, include in the model)? Which random ones?
+- Bonus points: cross-validate the model and report the betas and standard errors from all rounds to get an idea of how robust the estimates are. 
+3a. Is study a significant predictor in these models? What should you infer from this? Does study interact with diagnosis? What should you infer from this?
+
+```{r}
+#Making a model pr. acoustic feature
+
+#Which fixed factors and which random ones?
+
+#Study as significant predictor?
+
+#Interaction between study and diagnossis?
+```
+
+4. Bonus Question: Compare effect size of diagnosis across the different measures. Which measure seems most sensitive?
+- Tip: to compare across measures you need to put all of them on the same scale, that is, you need to "standardize" them (z-score)
+
+5. Bonus question. In the Clinical Info file you have additional information about the participants. Which additional parameters (e.g. age, gender) should we control for? Report the effects.
+
+6. Write a paragraph reporting methods and results
+
+[Next assignment: can we use these measures to build a tool that diagnoses people from voice only?]
+
+## N.B. Remember to save the acoustic features of voice in a separate file, so to be able to load them next time
+
+```{r}
+write.csv(dataframe from the loop,"AcousticFeatures.csv")
+```
