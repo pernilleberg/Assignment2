@@ -24,7 +24,7 @@ setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
 library(pacman)
 p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table)
 
-part1 = read.delim("Pitch/Study1D0S101T1_f0.txt")
+part1 = read.delim("Pitch/test/Study1D0S101T1_f0.txt")
 
 ```
 
@@ -61,43 +61,87 @@ image(RP, xlab = "", ylab = "", col = cols)
 - Remember to extract the relevant information from the file names (Participant, Diagnosis, Trial, Study)
 
 ```{r}
-folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/"
+folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/test" #adding a test folder with 100 files (50 with no diagnosis, 50 with diagnosis (25 from each study))
 
 filelist = list.files(path = folder , pattern = "*.txt", full.names = T)
-filelist = filelist[1:100]
+
 
 opt_param_extractor = function(filename){ #making a function to find optimal parameters
-  temp_df = read.delim(filename)
-  par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip")
+  temp_df = read.delim(filename) #reading the data
+  par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip") #specifying the parameters for the rqa
   opt_param = NULL
-  opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3.5, max.rec = 4.5))
+  opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3.5, max.rec = 4.5)) #specifying optimal parameters
+  #if else statement - if length of opt_param is bigger than one fill in the results in the result dataframe else insert NA's
   if (length(opt_param) > 1) {
-    result_df = data.frame(radius = opt_param[1], emddim = opt_param[2], delay = opt_param[3], filename = str_extract(str_extract(filename, "S\\d+"), "\\d+"))
+    result_df = data.frame(radius = opt_param[1], emddim = opt_param[2], delay = opt_param[3], filename = filename)
     
   } else {
-  result_df = data.frame(radius = NA, emddim = NA, delay = NA, filename = str_extract(str_extract(filename, "S\\d+"), "\\d+"))
+  result_df = data.frame(radius = NA, emddim = NA, delay = NA, filename = filename)
   }
   return(result_df)
 }
 
 temp=lapply(filelist,opt_param_extractor)
-opm_param_df = rbindlist(temp, fill = T)
+opt_param_df = rbindlist(temp, fill = T)
+
+#round(mean(opt_param_df$emddim, na.rm = T))
+
+#Creating a opt_df with the opt parameter best descriping the data
+opt_df = data.frame(opt_rad = median(opt_param_df$radius, na.rm = T),
+                    opt_emddim=median(opt_param_df$emddim, na.rm = T),
+                    opt_delay = median(opt_param_df$delay, na.rm = T))
 
 
 rqa_extractor = function(filename){ #making a function which applies the optimal parameters and save the rqa results
-  filename = filelist[1]
-  temp_df = read.delim(paste(folder, filename, sep = ""))
-  results = crqa(temp_df$f0, temp_df$f0, opt_par?)
-  data.frame(RR = result[1], DET = result[2], NRLINE = result[3],
+  temp_df = read.delim(filename) #read data
+  result = try(crqa(temp_df$f0, temp_df$f0, embed = opt_df$opt_emddim, delay = opt_df$opt_delay, radius = opt_df$opt_rad, normalize = 0, rescale = 0, mindiagline = 2, minvertline = 2)) #do the crqa function -> use try so it continues to run even if crqa() files
+  #if else statement to return either results or NA's
+  if (length(result) > 1) {
+    result_df = data.frame(RR = result[1], DET = result[2], NRLINE = result[3],
              maxL = result[4], L = result[5], ENTR = result[6],
-             rENTR = result[7], LAM = result[8], TT = result[9])
-  ##RR = percentage of black dots, DET = how many of the individual repitions occur in connected trajectories, L = average length of line structures, maxL = longest line, ENTR = entrophy (predictability of the next dot), TT = average length of vertical lines
-  
+             rENTR = result[7], LAM = result[8], TT = result[9], 
+             filename = filename)
+     ##RR = percentage of black dots, DET = how many of the individual repitions occur in connected trajectories, L = average length of line structures, maxL = longest line, ENTR = entrophy (predictability of the next dot), TT = average length of vertical lines
+  } else {
+  result_df = data.frame(RR = NA, DET = NA, NRLINE = NA,
+             maxL = NA, L = NA, ENTR = NA,
+             rENTR = NA, LAM = NA, TT = NA, 
+             filename = filename)
+  }
+  return(result_df)
 }
 
-schizo_df=rbindlist(temp, fill = T)
+temp2 = lapply(filelist, rqa_extractor)
+schizo_df = rbindlist(temp2, fill = T)
 
-#Diagnosis --> 0 = control
+#Reali<ed we didn't have time and pitch in the full dataframe, so we make a new function
+readfunction = function(filename){
+  temp = read.delim(filename)
+  temp$filename = filename
+  return(temp)
+}
+
+temp3 = lapply(filelist, readfunction)
+temp3_df = rbindlist(temp3, fill = T)
+
+merged_df = merge(schizo_df,temp3_df, by = "filename")
+
+#renaming f0 variable to pitch
+merged_df = plyr::rename(merged_df, c("f0" = "pitch"))
+
+#Getting all the beautiful information stored in filename into seperate columns:
+
+merged_df$filename = str_extract(merged_df$filename, "Study\\w+")
+
+merged_df$study = str_extract(merged_df$filename, "\\d+")
+
+merged_df$diagnosis = str_extract(str_extract(merged_df$filename, "D\\d+"), "\\d+")
+
+merged_df$ID = str_extract(str_extract(merged_df$filename, "S\\d+"), "\\d+")
+
+merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
+
+#Diagnosis, 0 = control
 ```
 
 3. Make one model per acoustic feature and test whether you can observe significant difference due to Diagnosis. Tip: Which other fixed factors should you control for (that is, include in the model)? Which random ones?
@@ -106,6 +150,7 @@ schizo_df=rbindlist(temp, fill = T)
 
 ```{r}
 #Making a model pr. acoustic feature
+m1 = lmerTest::lmer()
 
 #Which fixed factors and which random ones?
 
@@ -126,5 +171,5 @@ schizo_df=rbindlist(temp, fill = T)
 ## N.B. Remember to save the acoustic features of voice in a separate file, so to be able to load them next time
 
 ```{r}
-write.csv(dataframe from the loop,"AcousticFeatures.csv")
+write.csv(merged_df,"AcousticFeatures.csv")
 ```
