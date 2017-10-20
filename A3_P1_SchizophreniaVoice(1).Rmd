@@ -1,6 +1,6 @@
 ---
 title: "Assignment2_Part1_VoiceInSchizophrenia"
-author: "Riccardo Fusaroli"
+author: "Pernille Berg Lassen"
 date: "July 17, 2016"
 output: html_document
 ---
@@ -61,7 +61,7 @@ image(RP, xlab = "", ylab = "", col = cols)
 - Remember to extract the relevant information from the file names (Participant, Diagnosis, Trial, Study)
 
 ```{r}
-folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/test" #adding a test folder with 100 files (50 with no diagnosis, 50 with diagnosis (25 from each study))
+folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/test" #adding a test folder with 100 files (50 with no diagnosis, 50 with diagnosis (25 from study 1 and 2))
 
 filelist = list.files(path = folder , pattern = "*.txt", full.names = T)
 
@@ -69,7 +69,7 @@ filelist = list.files(path = folder , pattern = "*.txt", full.names = T)
 opt_param_extractor = function(filename){ #making a function to find optimal parameters
   temp_df = read.delim(filename) #reading the data
   par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip") #specifying the parameters for the rqa
-  opt_param = NULL
+  opt_param = NULL #making an empty optimal paramters list, where they can be stored, as they are computed
   opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3.5, max.rec = 4.5)) #specifying optimal parameters
   #if else statement - if length of opt_param is bigger than one fill in the results in the result dataframe else insert NA's
   if (length(opt_param) > 1) {
@@ -81,21 +81,21 @@ opt_param_extractor = function(filename){ #making a function to find optimal par
   return(result_df)
 }
 
-temp=lapply(filelist,opt_param_extractor)
-opt_param_df = rbindlist(temp, fill = T)
+temp=lapply(filelist,opt_param_extractor) #making a temp df, where optimal paramters are extracted from the files
+opt_param_df = rbindlist(temp, fill = T) #making a dataframe with the optimal paramters
 
 #round(mean(opt_param_df$emddim, na.rm = T))
 
-#Creating a opt_df with the opt parameter best descriping the data
+#Creating a opt_df with the opt parameters best descriping the data (the median)
 opt_df = data.frame(opt_rad = median(opt_param_df$radius, na.rm = T),
                     opt_emddim=median(opt_param_df$emddim, na.rm = T),
                     opt_delay = median(opt_param_df$delay, na.rm = T))
 
 
-rqa_extractor = function(filename){ #making a function which applies the optimal parameters and save the rqa results
+rqa_extractor = function(filename){ #making a function which applies the optimal parameters to perform an rqa, and save these results
   temp_df = read.delim(filename) #read data
-  result = try(crqa(temp_df$f0, temp_df$f0, embed = opt_df$opt_emddim, delay = opt_df$opt_delay, radius = opt_df$opt_rad, normalize = 0, rescale = 0, mindiagline = 2, minvertline = 2)) #do the crqa function -> use try so it continues to run even if crqa() files
-  #if else statement to return either results or NA's
+  result = try(crqa(temp_df$f0, temp_df$f0, embed = opt_df$opt_emddim, delay = opt_df$opt_delay, radius = opt_df$opt_rad, normalize = 0, rescale = 0, mindiagline = 2, minvertline = 2)) #performing the crqa function -> use try so it continues to run even if crqa() fails
+  #if else statement to return either results or NA's (if crqa() fails - same procedure as the first function)
   if (length(result) > 1) {
     result_df = data.frame(RR = result[1], DET = result[2], NRLINE = result[3],
              maxL = result[4], L = result[5], ENTR = result[6],
@@ -112,9 +112,9 @@ rqa_extractor = function(filename){ #making a function which applies the optimal
 }
 
 temp2 = lapply(filelist, rqa_extractor)
-schizo_df = rbindlist(temp2, fill = T)
+schizo_df = rbindlist(temp2, fill = T) #a dataframe with all the acoustic features extracted from the data using rqa
 
-#Reali<ed we didn't have time and pitch in the full dataframe, so we make a new function
+#Realized we didn't have time and pitch in the full dataframe, so we make a new function to extract that from the datafiles
 readfunction = function(filename){
   temp = read.delim(filename)
   temp$filename = filename
@@ -124,7 +124,7 @@ readfunction = function(filename){
 temp3 = lapply(filelist, readfunction)
 temp3_df = rbindlist(temp3, fill = T)
 
-merged_df = merge(schizo_df,temp3_df, by = "filename")
+merged_df = merge(schizo_df,temp3_df, by = "filename") #now we have the right dataframe
 
 #renaming f0 variable to pitch
 merged_df = plyr::rename(merged_df, c("f0" = "pitch"))
@@ -132,16 +132,12 @@ merged_df = plyr::rename(merged_df, c("f0" = "pitch"))
 #Getting all the beautiful information stored in filename into seperate columns:
 
 merged_df$filename = str_extract(merged_df$filename, "Study\\w+")
-
 merged_df$study = str_extract(merged_df$filename, "\\d+")
-
 merged_df$diagnosis = str_extract(str_extract(merged_df$filename, "D\\d+"), "\\d+")
-
 merged_df$ID = str_extract(str_extract(merged_df$filename, "S\\d+"), "\\d+")
-
 merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
 
-#Diagnosis, 0 = control
+#Note to self; For Diagnosis variable: 0 = control, 1 = schizophrenia
 ```
 
 3. Make one model per acoustic feature and test whether you can observe significant difference due to Diagnosis. Tip: Which other fixed factors should you control for (that is, include in the model)? Which random ones?
@@ -150,7 +146,7 @@ merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
 
 ```{r}
 #Making a model pr. acoustic feature
-m1 = lmerTest::lmer()
+#m1 = lmerTest::lmer(pitch~1+time+diagnosis+(1|time)+)
 
 #Which fixed factors and which random ones?
 
