@@ -26,7 +26,7 @@ setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
 library(pacman)
 p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table,readr,raster,caret,pROC,optimx)
 
-#Reading in the data
+#Reading the data
 schizo_df = read.csv("AcousticFeatures.csv")
 
 schizo_df = subset(schizo_df, select = -c(X))
@@ -39,7 +39,7 @@ schizo_df$diagnosis = as.factor(schizo_df$diagnosis)
 
 schizo_df$diagnosis = plyr::revalue(schizo_df$diagnosis,c("0"="control","1"="schizophrenia"))
 
-m1 = glmer(diagnosis~1+scale(rangev)+scale(trial)+(1+scale(trial)|ID)+(1|study),schizo_df,family = binomial)
+m1 = glmer(diagnosis~1+scale(rangev)+scale(trial)+(1+scale(trial)|study),schizo_df,family = binomial)
 summary(m1)
 
 #Range significantly predict diagnosis
@@ -59,12 +59,12 @@ schizo_df$Predictions[schizo_df$PredictionsPerc>0.5]="schizophrenia"
 schizo_df$Predictions[schizo_df$PredictionsPerc<=0.5]="control"
 conf = confusionMatrix(data = schizo_df$Predictions, reference = schizo_df$diagnosis, positive = "schizophrenia") 
 
+
 #ROC curve
 rocCurve = roc(response = schizo_df$diagnosis, predictor = schizo_df$PredictionsPerc)
 auc(rocCurve) #area under the curve --> should be reported
 ci(rocCurve)
 plot(rocCurve, legacy.axes = TRUE) 
-
 ```
 
 Then cross-validate the logistic regression and re-calculate performance on the testing folds. N.B. The cross-validation functions you already have should be tweaked: you need to calculate these new performance measures.
@@ -73,16 +73,12 @@ Then cross-validate the logistic regression and re-calculate performance on the 
 getPerformance = function(test_df,train_df, model){
   #Getting performance from test dataframe
   test_df$PredictionsPerc = inv.logit(predict(model, test_df,allow.new.levels = T))
-  #test_df$PredictionsLogit=predict(model, test_df, allow.new.levels = T)
-  #test_df$PredictionsPerc=inv.logit(test_df$PredictionsLogit)
   test_df$Predictions[test_df$PredictionsPerc>0.5]="schizophrenia"
   test_df$Predictions[test_df$PredictionsPerc<=0.5]="control"
   conf_test = confusionMatrix(data = test_df$Predictions, reference = test_df$diagnosis, positive = "schizophrenia")
   
   #Get performance from training dataframe
   train_df$PredictionsPerc = inv.logit(predict(model, train_df, allow.new.levels = T))
-  #train_df$PredictionsLogit=predict(model, allow.new.levels = T)
-  #train_df$PredictionsPerc=inv.logit(train_df$PredictionsLogit)
   train_df$Predictions[train_df$PredictionsPerc>0.5]="schizophrenia"
   train_df$Predictions[train_df$PredictionsPerc<=0.5]="control"
   conf_train = confusionMatrix(data = train_df$Predictions, reference = train_df$diagnosis, positive = "schizophrenia")
@@ -101,6 +97,8 @@ getPerformance = function(test_df,train_df, model){
   
   return(result_df) 
 }
+
+
 
 #temp info (for testing the CrossVal function)
 #data = schizo_df
@@ -132,7 +130,7 @@ for (fold in seq(numfolds)){
 return(perf_df)
 }
 
-perf_df = CrossVal(schizo_df, numfolds = 4, id_col = "ID", cat_col = c("diagnosis"), modelString = "diagnosis~1+rangev+trial+(1+trial|ID)+(1+trial|study)")
+perf_df = CrossVal(schizo_df, numfolds = 4, id_col = "ID", cat_col = c("diagnosis"), modelString = "diagnosis~1+rangev+trial+(1+trial|study)")
 
 ```
 N.B. the predict() function generates log odds (the full scale between minus and plus infinity). Log odds > 0 indicates a choice of 1, below a choice of 0.
@@ -178,9 +176,9 @@ Now it's time to go wild! Use all (voice-related) variables and interactions you
 
 ```{r}
 #making a function, which can perform multiple crossVal - number of crossVal er specified using rep
-multipleCrossVal = function(data, numfolds, id_col = NULL, cat_col = NULL, modelString, rep){
+multipleCrossVal = function(data, modelString, numfolds, id_col = NULL, cat_col = NULL, rep){
   for (i in seq(rep)){ #creating a loop with goes through the sequence of the rep
-    temp = CrossVal(data, numfolds, id_col = id_col, cat_col = cat_col) #creates a temp df with crossVal values
+    temp = CrossVal(data, numfolds, id_col = id_col, cat_col = cat_col, modelString = modelString) #creates a temp df with crossVal values
     temp$rep = i #creating a rep column where value is number of rep
     temp$numrep = rep
     if (i == seq(rep)[1]){result_df = temp #for first rep, the function fills in the values in temp df into the result df
@@ -190,24 +188,25 @@ multipleCrossVal = function(data, numfolds, id_col = NULL, cat_col = NULL, model
 }
 
 #making an empty list of modelstrings to test
-model_strings = c()
+modelStrings = c()
 
 #Extracting the various predictors an saving them in an object
-predictors2 = colnames(schizo_df)[! colnames(schizo_df)%in% c("diagnosis", "study", "trial", "ID", "Predictions","PredictionsPerc", "PredictionsLogit", "delay", "radius", "embed")]
+predictors = colnames(schizo_df)[! colnames(schizo_df)%in% c("diagnosis", "study", "trial", "ID", "Predictions","PredictionsPerc", "PredictionsLogit", "delay", "radius", "embed")]
 
-predictors2
-predictors2 = predictors2[10:12]
+predictors
 
 #making a loop which goes through the extracted predictors, paste them into a model string and save these model string til the list model_strings:
-for (predictor in predictors2){
-  mdl_string = paste("diagnosis~1+trial+",predictor,"+ (1+trial|ID) + (1+trial|study)", sep ="")
-  model_strings = c(model_strings,mdl_string) #Now we have a list of awesome modelstring
+for (predictor in predictors){
+  modelString = paste("diagnosis~1+trial+",predictor,"+ (1+trial|ID) + (1+trial|study)", sep ="")
+  modelStrings = c(modelStrings,modelString) #Now we have a list of awesome modelstring
 }
 
-#Creating a loop, applying the multipleCrossVal function to all the modelstrings in the list Model_strings
-for (model_string in model_strings){
-  temp = multipleCrossVal(mdl_string = model_string, numfolds = 4, data = schizo_df, id_col = "ID", cat_col = c("diagnosis"), rep = 3)
-  if (model_string == model_strings[1]){
+modelStrings
+
+#Creating a loop, applying the multipleCrossVal function to all the modelstrings in the list modelStrings
+for (modelString in modelStrings){
+  temp = multipleCrossVal(data = schizo_df, modelString = modelString, numfolds = 4, id_col = "ID", cat_col = c("diagnosis"), rep = 3)
+  if (modelString == modelStrings[1]){
     perf_df4 = temp 
   } else {
     perf_df4 = rbind(perf_df4,temp)
@@ -216,8 +215,17 @@ for (model_string in model_strings){
 
 #Getting the average performance for all the models into a dateframe  
 
-perf_df5 = group_by(perf_df4, mdl) %>%
-  summarise_all(funs(mean).,na.rm = T)
+perf_df5 = group_by(perf_df4, mdl_string) %>%
+  dplyr::summarise(mean_acc_test=mean(Acc_test, na.rm = T),
+                   mean_sensitivity_test=mean(Sensitivity_test, na.rm = T),
+                   mean_specificity_test = mean(Specificity_test, na.rm = T),
+                   mean_PPV_test = mean(PPV_test, na.rm = T),
+                   mean_NPV_test = mean(NPV_test, na.rm = T),
+                   mean_acc_train=mean(Acc_train, na.rm = T),
+                   mean_sensitivity_train=mean(Sensitivity_train, na.rm = T),
+                   mean_specificity_train = mean(Specificity_train, na.rm = T),
+                   mean_PPV_train = mean(PPV_train, na.rm = T),
+                   mean_NPV_train = mean(NPV_train, na.rm = T))
 
 ```
 

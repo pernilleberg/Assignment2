@@ -22,9 +22,9 @@ N.B. There are looots of files to be dealt with. Probably too many for your comp
 ```{r}
 setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
 library(pacman)
-p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table)
+p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table,readr,raster)
 
-part1 = read.delim("Pitch/test/Study1D0S101T1_f0.txt")
+part1 = read.delim("Pitch/Study1D0S101T1_f0.txt")
 
 ```
 
@@ -37,17 +37,18 @@ part1 = read.delim("Pitch/test/Study1D0S101T1_f0.txt")
 ```{r}
 #Extracting standard descriptors of pitch
 summary(part1)
-#Getting mean, sd, range median, min, max, SE etc.)
+#Getting mean, sd, range median, min, max, SE etc.
 round(stat.desc(part1$f0, norm = T),6)
 
-#Getting iqr and mad
+#Calculating interquatile range (IQR), mean absoluted deviation (mad) and coefficient of variance (cv - also avaliable in stat.desc)
 IQR(part1$f0)
 mad(part1$f0)
+cv(part1$f0)
 
-#Extracting complex descriptors, crqa compares phase spaces in two time series with a delay - returns distance matrix
+#Extracting complex descriptors - crqa compares phase spaces in two time series with a specified delay -> returns distance matrix
 crqa_part1 = crqa(part1$f0, part1$f0, embed = 2, delay = 1, normalize = 0, rescale = 0, radius = 0.5, mindiagline = 2, minvertline = 1)
 
-#Let's make a pretty graph
+#Making a graph of the rqa
 RP = crqa_part1$RP
 RP = matrix(as.numeric(RP), nrow = ncol(RP)) 
 cols = c("white","blue4")
@@ -55,23 +56,22 @@ image(RP, xlab = "", ylab = "", col = cols)
 
 ```
 
-#function that tells R to continue runing an analysis, even when it finds an error (it will still inform you about the error) --> wrapping the function in try()
 
 2. Second you will have to turn the code into a function and loop through all the files (or even better use apply/sapply/lapply)
 - Remember to extract the relevant information from the file names (Participant, Diagnosis, Trial, Study)
 
 ```{r}
-folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch/test" #adding a test folder with 100 files (50 with no diagnosis, 50 with diagnosis (25 from study 1 and 2))
+folder = "C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2/Pitch" 
 
 filelist = list.files(path = folder , pattern = "*.txt", full.names = T)
 
 
-opt_param_extractor = function(filename){ #making a function to find optimal parameters
-  temp_df = read.delim(filename) #reading the data
-  par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip") #specifying the parameters for the rqa
-  opt_param = NULL #making an empty optimal paramters list, where they can be stored, as they are computed
-  opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3.5, max.rec = 4.5)) #specifying optimal parameters
-  #if else statement - if length of opt_param is bigger than one fill in the results in the result dataframe else insert NA's
+opt_param_extractor = function(filename){ #A function which extract the optimal parameters (which is needed for running a rqa)
+  temp_df = read.delim(filename) #reading the datafiles
+  par = list(lgM =  15, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip") #specifying the parameters for the rqa
+  opt_param = NULL #making an empty optimal paramters list, in which they can be stored as they are computed
+  opt_param = try(optimizeParam(temp_df$f0, temp_df$f0, par, min.rec = 3, max.rec = 4)) #calculating the optimal parameters using optimizePatam()
+  #if else statement - if length of opt_param is bigger than 1 fill the results into the result dataframe. Else insert NA's
   if (length(opt_param) > 1) {
     result_df = data.frame(radius = opt_param[1], emddim = opt_param[2], delay = opt_param[3], filename = filename)
     
@@ -79,20 +79,18 @@ opt_param_extractor = function(filename){ #making a function to find optimal par
   result_df = data.frame(radius = NA, emddim = NA, delay = NA, filename = filename)
   }
   return(result_df)
-}
+} 
 
-temp=lapply(filelist,opt_param_extractor) #making a temp df, where optimal paramters are extracted from the files
+temp=lapply(filelist,opt_param_extractor) #applying the opt_param_extractor function, making a temp object, where optimal paramters from files are stored
 opt_param_df = rbindlist(temp, fill = T) #making a dataframe with the optimal paramters
 
-#round(mean(opt_param_df$emddim, na.rm = T))
-
-#Creating a opt_df with the opt parameters best descriping the data (the median)
+#Creating a opt_df with the opt parameters best descriping the all the data (finding the median of the extracted parameter-values)
 opt_df = data.frame(opt_rad = median(opt_param_df$radius, na.rm = T),
                     opt_emddim=median(opt_param_df$emddim, na.rm = T),
                     opt_delay = median(opt_param_df$delay, na.rm = T))
 
 
-rqa_extractor = function(filename){ #making a function which applies the optimal parameters to perform an rqa, and save these results
+rqa_extractor = function(filename){ #making a function which applies the optimal parameters to perform an rqa, and save the results
   temp_df = read.delim(filename) #read data
   result = try(crqa(temp_df$f0, temp_df$f0, embed = opt_df$opt_emddim, delay = opt_df$opt_delay, radius = opt_df$opt_rad, normalize = 0, rescale = 0, mindiagline = 2, minvertline = 2)) #performing the crqa function -> use try so it continues to run even if crqa() fails
   #if else statement to return either results or NA's (if crqa() fails - same procedure as the first function)
@@ -107,37 +105,30 @@ rqa_extractor = function(filename){ #making a function which applies the optimal
              maxL = NA, L = NA, ENTR = NA,
              rENTR = NA, LAM = NA, TT = NA, 
              filename = filename)
-  }
+  } #extracting standard and less standard descriptors 
+  result_df$meanv = mean(temp_df$f0, rm.na = T)
+  result_df$sdv = sd(temp_df$f0)
+  result_df$medianv = median(temp_df$f0)
+  result_df$rangev = max(temp_df$f0) - min(temp_df$f0)
+  result_df$iqrv = IQR(temp_df$f0)
+  result_df$madv = mad(temp_df$f0)
+  result_df$coefvarv = sd(temp_df$f0)/mean(temp_df$f0)
   return(result_df)
 }
 
-temp2 = lapply(filelist, rqa_extractor)
-schizo_df = rbindlist(temp2, fill = T) #a dataframe with all the acoustic features extracted from the data using rqa
+temp2 = lapply(filelist, rqa_extractor) #applying the rqa_extractor to the files, making an temp object with results
+schizo_df = rbindlist(temp2, fill = T) #a dataframe with all the rqa parameters and other descriptors (acoustic features)
 
-#Realized we didn't have time and pitch in the full dataframe, so we make a new function to extract that from the datafiles
-readfunction = function(filename){
-  temp = read.delim(filename)
-  temp$filename = filename
-  return(temp)
-}
+#Getting all the participant nformation stored in filename into seperate columns:
 
-temp3 = lapply(filelist, readfunction)
-temp3_df = rbindlist(temp3, fill = T)
+schizo_df$filename = str_extract(schizo_df$filename, "Study\\w+")
+schizo_df$study = str_extract(schizo_df$filename, "\\d+")
+schizo_df$diagnosis = str_extract(str_extract(schizo_df$filename, "D\\d+"), "\\d+")
+schizo_df$ID = str_extract(str_extract(schizo_df$filename, "S\\d+"), "\\d+")
+schizo_df$trial = str_extract(str_extract(schizo_df$filename, "T\\d+"), "\\d+")
+schizo_df = subset(schizo_df, select = -c(filename))
 
-merged_df = merge(schizo_df,temp3_df, by = "filename") #now we have the right dataframe
-
-#renaming f0 variable to pitch
-merged_df = plyr::rename(merged_df, c("f0" = "pitch"))
-
-#Getting all the beautiful information stored in filename into seperate columns:
-
-merged_df$filename = str_extract(merged_df$filename, "Study\\w+")
-merged_df$study = str_extract(merged_df$filename, "\\d+")
-merged_df$diagnosis = str_extract(str_extract(merged_df$filename, "D\\d+"), "\\d+")
-merged_df$ID = str_extract(str_extract(merged_df$filename, "S\\d+"), "\\d+")
-merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
-
-#Note to self; For Diagnosis variable: 0 = control, 1 = schizophrenia
+#Note to self; For Diagnosis variable: 0 = control, 1 = schizophrenia, rename it?
 ```
 
 3. Make one model per acoustic feature and test whether you can observe significant difference due to Diagnosis. Tip: Which other fixed factors should you control for (that is, include in the model)? Which random ones?
@@ -145,14 +136,53 @@ merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
 3a. Is study a significant predictor in these models? What should you infer from this? Does study interact with diagnosis? What should you infer from this?
 
 ```{r}
-#Making a model pr. acoustic feature
-#m1 = lmerTest::lmer(pitch~1+time+diagnosis+(1|time)+)
+#Making a model pr. acoustic feature - acoustic features = range, mean, median, RR, DET, ENTR, LAM, TT, L, maxL) 
+
+acousticFeatures = read.csv("AcousticFeatures.csv")
+acousticFeatures = subset(acousticFeatures, select = -c(X))
+
+acousticFeatures$diagnosis = as.factor(acousticFeatures$diagnosis)
+acousticFeatures$NRLINE = as.numeric(acousticFeatures$NRLINE)
+acousticFeatures$maxL = as.numeric(acousticFeatures$maxL)
+
+m1 = lmerTest::lmer(rangev~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m1)
+
+m2 = lmerTest::lmer(medianv~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m2)
+
+m3 = lmerTest::lmer(DET~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m3)
+
+m4 = lmerTest::lmer(ENTR~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m4)
+
+m5 = lmerTest::lmer(LAM~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m5)
+
+m6 = lmerTest::lmer(TT~1+trial+diagnosis +(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m6)
+
+m7 = lmerTest::lmer(maxL~1+trial+diagnosis +(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m7)
+
+m8 = lmerTest::lmer(RR~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+summary(m8)
+
+m9 = lmerTest::lmer(meanv~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+summary(m9)
 
 #Which fixed factors and which random ones?
+#Random intercept = ID (several data point pr. participant, particpants can have individual intercepts/starting points)
+  #Random slope = trial (participants can vary over for each trial --> systematic variance between each trial)
 
 #Study as significant predictor?
+#What is study?, adding study as a random effect --> controlling for variability between the studies (might be systematc error --> the different studies are carried out by different researchers)
 
 #Interaction between study and diagnossis?
+m10 = lmerTest::lmer()
+
+#recurrence rate is higher = crosses the same dimensions in the phase space more often --> they reccur 
 ```
 
 4. Bonus Question: Compare effect size of diagnosis across the different measures. Which measure seems most sensitive?
@@ -167,5 +197,5 @@ merged_df$trial = str_extract(str_extract(merged_df$filename, "T\\d+"), "\\d+")
 ## N.B. Remember to save the acoustic features of voice in a separate file, so to be able to load them next time
 
 ```{r}
-write.csv(merged_df,"AcousticFeatures.csv")
+write.csv(schizo_df,"AcousticFeatures.csv")
 ```
