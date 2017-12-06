@@ -54,6 +54,7 @@ RP = matrix(as.numeric(RP), nrow = ncol(RP))
 cols = c("white","blue4")
 image(RP, xlab = "", ylab = "", col = cols)
 
+
 ```
 
 
@@ -144,33 +145,43 @@ acousticFeatures = subset(acousticFeatures, select = -c(X))
 acousticFeatures$diagnosis = as.factor(acousticFeatures$diagnosis)
 acousticFeatures$NRLINE = as.numeric(acousticFeatures$NRLINE)
 acousticFeatures$maxL = as.numeric(acousticFeatures$maxL)
+library(lmerTest)
 
-m1 = lmerTest::lmer(rangev~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+m1 = lmerTest::lmer(rangev~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m1)
+#Non-significant
 
-m2 = lmerTest::lmer(medianv~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+m2 = lmerTest::lmer(medianv~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m2)
+#Significant
 
-m3 = lmerTest::lmer(DET~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+m3 = lmerTest::lmer(DET~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m3)
+#Non-significant
 
-m4 = lmerTest::lmer(ENTR~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+m4 = lmerTest::lmer(ENTR~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m4)
+#Non-significant
 
-m5 = lmerTest::lmer(LAM~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+m5 = lmerTest::lmer(LAM~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m5)
+#Non-significant
 
-m6 = lmerTest::lmer(TT~1+trial+diagnosis +(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+m6 = lmerTest::lmer(TT~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m6)
+#Non-significant
 
-m7 = lmerTest::lmer(maxL~1+trial+diagnosis +(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+m7 = lmerTest::lmer(maxL~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m7)
+#Non-significant - study is significant
 
-m8 = lmerTest::lmer(RR~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+m8 = lmerTest::lmer(RR~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m8)
+#Significant, also study
 
-m9 = lmerTest::lmer(meanv~1+trial+diagnosis+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+m9 = lmerTest::lmer(meanv~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m9)
+#Significant
 
 #Which fixed factors and which random ones?
 #Random intercept = ID (several data point pr. participant, particpants can have individual intercepts/starting points)
@@ -180,7 +191,41 @@ summary(m9)
 #What is study?, adding study as a random effect --> controlling for variability between the studies (might be systematc error --> the different studies are carried out by different researchers)
 
 #Interaction between study and diagnossis?
-m10 = lmerTest::lmer()
+m9 = lmerTest::lmer(rangev~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m9)
+#Non-significant
+
+m10 = lmerTest::lmer(medianv~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m10)
+#Significant
+
+m11 = lmerTest::lmer(DET~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
+summary(m11)
+#Non-significant
+
+m12 = lmerTest::lmer(ENTR~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m12)
+#Non-significant
+
+m13 = lmerTest::lmer(LAM~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m13)
+#Non-significant
+
+m14 = lmerTest::lmer(TT~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m14)
+#Non-significant
+
+m15 = lmerTest::lmer(maxL~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
+summary(m15)
+#Non-significant - study is significant
+
+m16 = lmerTest::lmer(RR~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+summary(m16)
+#Significant, also study
+
+m17 = lmerTest::lmer(meanv~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
+summary(m17)
+#Significant
 
 #recurrence rate is higher = crosses the same dimensions in the phase space more often --> they reccur 
 ```

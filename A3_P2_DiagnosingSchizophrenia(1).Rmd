@@ -24,7 +24,7 @@ setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
 
 #Loading packages
 library(pacman)
-p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table,readr,raster,caret,pROC,optimx)
+p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,crqa,readr,raster,caret,pROC,optimx,boot)
 
 #Reading the data
 schizo_df = read.csv("AcousticFeatures.csv")
@@ -44,7 +44,6 @@ summary(m1)
 
 #Range significantly predict diagnosis
 
-#schizo_df$ID = as.factor(paste(schizo_df$ID, as.numeric(schizo_df$diagnosis)-1, sep = ""))
 ```
 
 Calculate the different performance measures (accuracy, sensitivity, specificity, PPV, NPV, ROC curve) on a logistic regression using the full dataset. Don't forget the random effects!
@@ -58,7 +57,7 @@ range(schizo_df$PredictionsPerc)
 schizo_df$Predictions[schizo_df$PredictionsPerc>0.5]="schizophrenia"
 schizo_df$Predictions[schizo_df$PredictionsPerc<=0.5]="control"
 conf = confusionMatrix(data = schizo_df$Predictions, reference = schizo_df$diagnosis, positive = "schizophrenia") 
-
+conf
 
 #ROC curve
 rocCurve = roc(response = schizo_df$diagnosis, predictor = schizo_df$PredictionsPerc)
@@ -76,24 +75,28 @@ getPerformance = function(test_df,train_df, model){
   test_df$Predictions[test_df$PredictionsPerc>0.5]="schizophrenia"
   test_df$Predictions[test_df$PredictionsPerc<=0.5]="control"
   conf_test = confusionMatrix(data = test_df$Predictions, reference = test_df$diagnosis, positive = "schizophrenia")
+  rocCurve_test = roc(response = test_df$diagnosis, predictor = test_df$PredictionsPerc)
   
   #Get performance from training dataframe
   train_df$PredictionsPerc = inv.logit(predict(model, train_df, allow.new.levels = T))
   train_df$Predictions[train_df$PredictionsPerc>0.5]="schizophrenia"
   train_df$Predictions[train_df$PredictionsPerc<=0.5]="control"
   conf_train = confusionMatrix(data = train_df$Predictions, reference = train_df$diagnosis, positive = "schizophrenia")
+  rocCurve_train = roc(response = train_df$diagnosis, predictor = train_df$PredictionsPerc)
  
    result_df = data.frame(Acc_test = conf_test$overall[1], 
                           Sensitivity_test = conf_test$byClass[1], 
                           Specificity_test = conf_test$byClass[2], 
                           PPV_test = conf_test$byClass[3], 
                           NPV_test = conf_test$byClass[4],
+                          auc_test = auc(rocCurve_test),
           
                           Acc_train = conf_train$overall[1], 
                           Sensitivity_train = conf_train$byClass[1], 
                           Specificity_train = conf_train$byClass[2], 
                           PPV_train = conf_train$byClass[3], 
-                          NPV_train = conf_train$byClass[4])
+                          NPV_train = conf_train$byClass[4],
+                          auc_train = auc(rocCurve_train))
   
   return(result_df) 
 }
@@ -132,6 +135,8 @@ return(perf_df)
 
 perf_df = CrossVal(schizo_df, numfolds = 4, id_col = "ID", cat_col = c("diagnosis"), modelString = "diagnosis~1+rangev+trial+(1+trial|study)")
 
+mean(perf_df$auc_test)
+
 ```
 N.B. the predict() function generates log odds (the full scale between minus and plus infinity). Log odds > 0 indicates a choice of 1, below a choice of 0.
 N.B. you need to decide whether calculate performance on each single test fold or save all the prediction for test folds in one datase, so to calculate overall performance.
@@ -145,7 +150,7 @@ predictors = colnames(schizo_df[! colnames(schizo_df) %in% c("ID","diagnosis","t
 predictors
 
 for (predictor in predictors){
-  model_string = paste("diagnosis~1+trial+",predictor,"+ (1+trial|ID)+(1+trial|study)", sep ="")
+  model_string = paste("diagnosis~1+trial+",predictor,"+(1+trial|study)", sep ="")
   temp = CrossVal(data = schizo_df, numfolds = 4, id_col = "ID", cat_col = c("diagnosis"), modelString = model_string)
   temp$predictor = predictor
   if (predictor == predictors[1]){
@@ -161,13 +166,15 @@ perf_df2 = group_by(perf_df1, predictor) %>%
                    mean_specificity_test = mean(Specificity_test, na.rm = T),
                    mean_PPV_test = mean(PPV_test, na.rm = T),
                    mean_NPV_test = mean(NPV_test, na.rm = T),
+                   mean_auc_test = mean(auc_test, na.rm = T),
                    mean_acc_train=mean(Acc_train, na.rm = T),
                    mean_sensitivity_train=mean(Sensitivity_train, na.rm = T),
                    mean_specificity_train = mean(Specificity_train, na.rm = T),
                    mean_PPV_train = mean(PPV_train, na.rm = T),
-                   mean_NPV_train = mean(NPV_train, na.rm = T))
+                   mean_NPV_train = mean(NPV_train, na.rm = T),
+                   mean_auc_train = mean(auc_train, na.rm = T))
 
-#Use perf_df2 to see which predictor is best predictor - highest accuracy on test data? Highst specificity? Highest sensitivity
+#Use perf_df2 to see which predictor is best predictor - look at mean AUC for test!
 ```
 
 ### Question 3 - Which combination of acoustic predictors is best for diagnosing schizophrenia?
@@ -197,11 +204,16 @@ predictors
 
 #making a loop which goes through the extracted predictors, paste them into a model string and save these model string til the list model_strings:
 for (predictor in predictors){
-  modelString = paste("diagnosis~1+trial+",predictor,"+ (1+trial|ID) + (1+trial|study)", sep ="")
+  modelString = paste("diagnosis~1+trial+",predictor," + (1+trial|study)", sep ="")
   modelStrings = c(modelStrings,modelString) #Now we have a list of awesome modelstring
 }
 
 modelStrings
+
+#Adding interactions between acoustic features and trial to modelstrings
+for (predictor in predictors){
+  modelString = paste("diagnosis~1+trial*",predictor," + (1+trial|study)", sep ="")
+  modelStrings = c(modelStrings,modelString)}
 
 #Creating a loop, applying the multipleCrossVal function to all the modelstrings in the list modelStrings
 for (modelString in modelStrings){
@@ -213,7 +225,8 @@ for (modelString in modelStrings){
   }
 }
 
-#Getting the average performance for all the models into a dateframe  
+
+#Getting the average performance for all the models into a dateframe - remember: it's test results that count, not training  
 
 perf_df5 = group_by(perf_df4, mdl_string) %>%
   dplyr::summarise(mean_acc_test=mean(Acc_test, na.rm = T),
@@ -221,11 +234,13 @@ perf_df5 = group_by(perf_df4, mdl_string) %>%
                    mean_specificity_test = mean(Specificity_test, na.rm = T),
                    mean_PPV_test = mean(PPV_test, na.rm = T),
                    mean_NPV_test = mean(NPV_test, na.rm = T),
+                   mean_auc_test = mean(auc_test, na.rm = T),
                    mean_acc_train=mean(Acc_train, na.rm = T),
                    mean_sensitivity_train=mean(Sensitivity_train, na.rm = T),
                    mean_specificity_train = mean(Specificity_train, na.rm = T),
                    mean_PPV_train = mean(PPV_train, na.rm = T),
-                   mean_NPV_train = mean(NPV_train, na.rm = T))
+                   mean_NPV_train = mean(NPV_train, na.rm = T),
+                   mean_auc_train = mean(auc_train, na.rm = T))
 
 ```
 
