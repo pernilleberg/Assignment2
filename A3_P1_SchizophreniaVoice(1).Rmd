@@ -24,6 +24,7 @@ setwd("C:/Users/Ejer/Desktop/3. semester/Experimental Methods 3/Assignment2")
 library(pacman)
 p_load(modelr,lmerTest,ggplot2,dplyr,MuMIn,stringr,tidyverse,plyr,Metrics,groupdata2,pastecs,crqa, data.table,readr,raster)
 
+#Reading in 1 participant to try out functions, loops etc.
 part1 = read.delim("Pitch/Study1D0S101T1_f0.txt")
 
 ```
@@ -149,39 +150,30 @@ library(lmerTest)
 
 m1 = lmerTest::lmer(rangev~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m1)
-#Non-significant
 
 m2 = lmerTest::lmer(medianv~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m2)
-#Significant
 
 m3 = lmerTest::lmer(DET~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m3)
-#Non-significant
 
 m4 = lmerTest::lmer(ENTR~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m4)
-#Non-significant
 
 m5 = lmerTest::lmer(LAM~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m5)
-#Non-significant
 
 m6 = lmerTest::lmer(TT~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m6)
-#Non-significant
 
 m7 = lmerTest::lmer(maxL~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m7)
-#Non-significant - study is significant
 
 m8 = lmerTest::lmer(RR~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m8)
-#Significant, also study
 
 m9 = lmerTest::lmer(meanv~1+trial+diagnosis+study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m9)
-#Significant
 
 #Which fixed factors and which random ones?
 #Random intercept = ID (several data point pr. participant, particpants can have individual intercepts/starting points)
@@ -193,39 +185,30 @@ summary(m9)
 #Interaction between study and diagnossis?
 m9 = lmerTest::lmer(rangev~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m9)
-#Non-significant
 
 m10 = lmerTest::lmer(medianv~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m10)
-#Significant
 
 m11 = lmerTest::lmer(DET~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures)
 summary(m11)
-#Non-significant
 
 m12 = lmerTest::lmer(ENTR~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m12)
-#Non-significant
 
 m13 = lmerTest::lmer(LAM~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m13)
-#Non-significant
 
 m14 = lmerTest::lmer(TT~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m14)
-#Non-significant
 
 m15 = lmerTest::lmer(maxL~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study), acousticFeatures, REML = F)
 summary(m15)
-#Non-significant - study is significant
 
 m16 = lmerTest::lmer(RR~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m16)
-#Significant, also study
 
 m17 = lmerTest::lmer(meanv~1+trial+diagnosis*study+(1+trial+diagnosis|ID)+(1|study),acousticFeatures,REML = F)
 summary(m17)
-#Significant
 
 #recurrence rate is higher = crosses the same dimensions in the phase space more often --> they reccur 
 ```
@@ -242,5 +225,5 @@ summary(m17)
 ## N.B. Remember to save the acoustic features of voice in a separate file, so to be able to load them next time
 
 ```{r}
-write.csv(schizo_df,"AcousticFeatures.csv")
+#write.csv(schizo_df,"AcousticFeatures.csv")
 ```
